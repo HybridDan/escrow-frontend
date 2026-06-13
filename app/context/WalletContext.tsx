@@ -1,49 +1,37 @@
 "use client";
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
-import {
-  StellarWalletsKit,
-  WalletNetwork,
-  FREIGHTER_ID,
-  FreighterModule,
-} from "@creit.tech/stellar-wallets-kit";
 
 interface WalletContextType {
   address: string | null;
-  kit: StellarWalletsKit | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   isConnecting: boolean;
+  signTransaction: (xdr: string) => Promise<string>;
 }
 
 const WalletContext = createContext<WalletContextType>({
   address: null,
-  kit: null,
   connect: async () => {},
   disconnect: () => {},
   isConnecting: false,
+  signTransaction: async () => "",
 });
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
-  const [kit, setKit] = useState<StellarWalletsKit | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
     try {
-      const walletKit = new StellarWalletsKit({
-        network: WalletNetwork.TESTNET,
-        selectedWalletId: FREIGHTER_ID,
-        modules: [new FreighterModule()],
-      });
-      await walletKit.openModal({
-        onWalletSelected: async (option) => {
-          walletKit.setWallet(option.id);
-          const { address: addr } = await walletKit.getAddress();
-          setAddress(addr);
-          setKit(walletKit);
-        },
-      });
+      const freighter = (window as any).freighter;
+      if (!freighter) {
+        alert("Please install the Freighter wallet extension.");
+        return;
+      }
+      await freighter.requestAccess();
+      const addr = await freighter.getPublicKey();
+      setAddress(addr);
     } catch (e) {
       console.error("Wallet connection failed", e);
     } finally {
@@ -51,13 +39,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const disconnect = useCallback(() => {
-    setAddress(null);
-    setKit(null);
+  const disconnect = useCallback(() => setAddress(null), []);
+
+  const signTransaction = useCallback(async (xdr: string): Promise<string> => {
+    const freighter = (window as any).freighter;
+    if (!freighter) throw new Error("Freighter not found");
+    const result = await freighter.signTransaction(xdr, {
+      networkPassphrase: "Test SDF Network ; September 2015",
+    });
+    return result.signedTxXdr ?? result;
   }, []);
 
   return (
-    <WalletContext.Provider value={{ address, kit, connect, disconnect, isConnecting }}>
+    <WalletContext.Provider value={{ address, connect, disconnect, isConnecting, signTransaction }}>
       {children}
     </WalletContext.Provider>
   );
