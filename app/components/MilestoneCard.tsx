@@ -64,106 +64,60 @@ export default function MilestoneCard({
   const remaining = BigInt(milestone.amount) - BigInt(released);
 
   return (
-    <div className="border border-gray-800 rounded-lg p-4 bg-gray-900 space-y-3">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-400">Milestone {milestone.index + 1}</p>
-          <p className="font-mono text-white text-sm mt-1">
-            {milestone.amount} stroops
-          </p>
-          {BigInt(released) > BigInt(0) && (
-            <p className="text-xs text-gray-500 mt-1">
-              Released: {released} · Remaining: {remaining.toString()}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          <span
-            className={`text-xs px-2 py-1 rounded-full border ${
-              statusColor[milestone.status] || "bg-gray-800 text-gray-400"
-            }`}
-          >
-            {milestone.status}
-          </span>
-          {isFreelancer && milestone.status === "Pending" && (
-            <button
-              onClick={() => onMarkDelivered?.(milestone.index)}
-              className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg transition"
-            >
-              Mark Delivered
-            </button>
-          )}
-          {isClient && ["Delivered", "PartiallyReleased"].includes(milestone.status) && (
-            <button
-              onClick={() => onApprove?.(milestone.index)}
-              className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded-lg transition"
-            >
-              Approve Full
-            </button>
-          )}
-          {(isClient || isFreelancer) &&
-            ["Pending", "Delivered", "PartiallyReleased"].includes(milestone.status) && (
-              <button
-                onClick={() => onDispute?.(milestone.index)}
-                className="text-xs bg-red-800 hover:bg-red-700 text-white px-3 py-1 rounded-lg transition"
-              >
-                Dispute
-              </button>
-            )}
-        </div>
+    <div
+      data-testid="milestone-card"
+      className="
+        border border-gray-800 rounded-lg p-4 bg-gray-900
+        flex flex-col gap-3
+        sm:flex-row sm:items-center sm:justify-between sm:gap-4
+      "
+    >
+      {/* Milestone info */}
+      <div className="min-w-0">
+        <p className="text-sm text-gray-400">Milestone {milestone.index + 1}</p>
+        <p className="font-mono text-white text-sm mt-1 truncate">
+          {milestone.amount} stroops
+        </p>
       </div>
 
-      {canPartialRelease && (
-        <div className="border-t border-gray-800 pt-3 space-y-2">
-          <p className="text-xs text-gray-400">Partial Release</p>
-          <div className="flex gap-2 items-center flex-wrap">
-            <input
-              type="number"
-              min="1"
-              value={partialAmount}
-              onChange={(e) => setPartialAmount(e.target.value)}
-              disabled={isPartialReleasePending}
-              placeholder="Amount (stroops)"
-              className="flex-1 min-w-[140px] bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-              aria-label={`Partial release amount for milestone ${milestone.index + 1}`}
-            />
-            <button
-              onClick={() => onPartialRelease?.(milestone.index, partialAmount)}
-              disabled={isPartialReleasePending || !partialAmount}
-              className="inline-flex items-center gap-2 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition"
-            >
-              {isPartialReleasePending && <ButtonSpinner />}
-              {isPartialReleasePending
-                ? getPhaseLabel(partialReleaseState.phase) || "Processing..."
-                : "Release Partial"}
-            </button>
-          </div>
-          <TxStatusBanner
-            state={partialReleaseState}
-            successMessage="Partial release submitted successfully."
-          />
-        </div>
-      )}
+      {/* Status badge + action buttons */}
+      <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
+        <span
+          className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap ${
+            statusColor[milestone.status] ?? "bg-gray-800 text-gray-400"
+          }`}
+        >
+          {milestone.status}
+        </span>
 
-      {canClaimAutoRelease && (
-        <div className="border-t border-gray-800 pt-3 space-y-2">
-          <p className="text-xs text-gray-400">Auto-Release Claim</p>
+        {isFreelancer && milestone.status === "Pending" && (
           <button
-            onClick={() => onClaimAutoRelease?.(milestone.index)}
-            disabled={isClaimAutoReleasePending}
-            className="inline-flex items-center gap-2 text-xs bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition"
+            onClick={() => onMarkDelivered?.(milestone.index)}
+            className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition whitespace-nowrap"
           >
-            {isClaimAutoReleasePending && <ButtonSpinner />}
-            {isClaimAutoReleasePending
-              ? getPhaseLabel(claimAutoReleaseState.phase) || "Processing..."
-              : "Claim Auto-Release"}
+            Mark Delivered
           </button>
-          <TxStatusBanner
-            state={claimAutoReleaseState}
-            successMessage="Auto-release claimed successfully."
-          />
-        </div>
-      )}
+        )}
+
+        {isClient && milestone.status === "Delivered" && (
+          <button
+            onClick={() => onApprove?.(milestone.index)}
+            className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+          >
+            Approve
+          </button>
+        )}
+
+        {(isClient || isFreelancer) &&
+          ["Pending", "Delivered"].includes(milestone.status) && (
+            <button
+              onClick={() => onDispute?.(milestone.index)}
+              className="text-xs bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+            >
+              Dispute
+            </button>
+          )}
+      </div>
     </div>
   );
 }

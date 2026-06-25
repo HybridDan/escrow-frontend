@@ -20,11 +20,9 @@ export default function CreateJob() {
   const [token, setToken] = useState("");
   const [autoReleaseDays, setAutoReleaseDays] = useState("7");
   const [milestones, setMilestones] = useState([{ amount: "" }]);
-  const [phase, setPhase] = useState<TxPhase>("idle");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
-
-  const loading = phase === "building" || phase === "signing" || phase === "submitting";
 
   const addMilestone = () => setMilestones([...milestones, { amount: "" }]);
   const removeMilestone = (i: number) =>
@@ -37,11 +35,32 @@ export default function CreateJob() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address) {
-      setError("Connect your wallet first.");
-      return;
-    }
-    if (loading) return;
+    if (!address) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const milestoneAmounts = milestones.map(m => BigInt(m.amount));
+
+      // Build transaction
+      const autoReleaseSeconds = BigInt(autoReleaseDays) * BigInt(24) * BigInt(60) * BigInt(60); // Convert days to seconds
+      const buildTxRes = await fetch(`${BACKEND_URL}/api/jobs/build-tx`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractId: CONTRACT_ID,
+          method: "initialize",
+          args: [
+            { type: "address", value: address }, // Admin (same as client for now)
+            { type: "address", value: address }, // Client
+            { type: "address", value: freelancer }, // Freelancer
+            { type: "address", value: arbiter }, // Arbiter
+            { type: "address", value: token }, // Token
+            { type: "u64", value: autoReleaseSeconds.toString() }, // Auto-release seconds
+            { type: "vec", value: milestoneAmounts.map(a => ({ type: "i128", value: a.toString() })) } // Milestone amounts
+          ],
+          sourceAddress: address
+        })
+      });
 
     setPhase("building");
     setError(null);
@@ -74,21 +93,59 @@ export default function CreateJob() {
         onPhase: setPhase,
       });
 
-      setTxHash(hash || null);
-      setPhase("success");
-      setTimeout(() => router.push("/dashboard"), 2000);
-    } catch (err: unknown) {
-      setPhase("error");
-      setError(formatTxError(err));
+      if (!submitRes.ok) throw new Error("Failed to submit transaction");
+      const { hash } = await submitRes.json();
+      setTxHash(hash);
+    } catch (err: any) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
   };
 
+  if (txHash) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+        <Navbar />
+        <main className="flex-1 overflow-y-auto flex items-center justify-center">
+          <div className="text-center px-4 py-12">
+            <div className="text-green-400 text-5xl mb-4">✓</div>
+            <h2 className="text-xl font-bold mb-2">Job Created!</h2>
+            <p className="text-gray-400 text-sm mb-6">Your escrow job is live on Stellar testnet.</p>
+            <a
+              href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 underline text-sm transition-colors duration-200"
+            >
+              View transaction on Stellar Expert →
+            </a>
+            <div className="mt-6">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-medium px-6 py-2 rounded-lg transition-all duration-150"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
       <Navbar />
-      <main className="max-w-xl mx-auto px-6 py-12">
-        <h1 className="text-2xl font-bold mb-8">Create New Job</h1>
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-12">
+        <h1 className="text-xl sm:text-2xl font-bold mb-6 sm:mb-8">Create New Job</h1>
+        {error && (
+          <div className="mb-5 rounded-lg bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Freelancer Address</label>
             <input
@@ -187,6 +244,7 @@ export default function CreateJob() {
             <p className="text-center text-sm text-gray-500">Connect your wallet to create a job</p>
           )}
         </form>
+        </div>
       </main>
     </div>
   );
