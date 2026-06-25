@@ -88,7 +88,7 @@ export default function CreateJob() {
           <div>
             <label className="block text-sm text-gray-400 mb-1">Freelancer Address</label>
             <input
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors duration-200"
               value={freelancer}
               onChange={(e) => setFreelancer(e.target.value)}
               placeholder="G..."
@@ -98,7 +98,7 @@ export default function CreateJob() {
           <div>
             <label className="block text-sm text-gray-400 mb-1">Arbiter Address</label>
             <input
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors duration-200"
               value={arbiter}
               onChange={(e) => setArbiter(e.target.value)}
               placeholder="G..."
@@ -108,7 +108,7 @@ export default function CreateJob() {
           <div>
             <label className="block text-sm text-gray-400 mb-1">Token Contract Address</label>
             <input
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors duration-200"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="C..."
@@ -120,7 +120,7 @@ export default function CreateJob() {
             <input
               type="number"
               min="1"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors duration-200"
               value={autoReleaseDays}
               onChange={(e) => setAutoReleaseDays(e.target.value)}
               required
@@ -132,7 +132,7 @@ export default function CreateJob() {
               {milestones.map((m, i) => (
                 <div key={i} className="flex gap-2 items-center">
                   <input
-                    className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                    className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors duration-200"
                     value={m.amount}
                     onChange={(e) => updateMilestone(i, e.target.value)}
                     placeholder={`Milestone ${i + 1} amount (stroops)`}
@@ -142,7 +142,7 @@ export default function CreateJob() {
                     <button
                       type="button"
                       onClick={() => removeMilestone(i)}
-                      className="text-red-400 hover:text-red-300 text-sm px-2 shrink-0"
+                      className="text-red-400 hover:text-red-300 active:scale-95 text-sm px-2 shrink-0 transition-all duration-150"
                     >
                       ✕
                     </button>
@@ -153,7 +153,7 @@ export default function CreateJob() {
             <button
               type="button"
               onClick={addMilestone}
-              className="mt-2 text-sm text-indigo-400 hover:text-indigo-300"
+              className="mt-2 text-sm text-indigo-400 hover:text-indigo-300 active:scale-95 transition-all duration-150"
             >
               + Add Milestone
             </button>
@@ -161,7 +161,7 @@ export default function CreateJob() {
           <button
             type="submit"
             disabled={loading || !address}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-3 rounded-lg transition"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 active:scale-95 text-white font-medium py-3 rounded-lg transition-all duration-150"
           >
             {loading ? "Creating..." : "Create Job"}
           </button>
