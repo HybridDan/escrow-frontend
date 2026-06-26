@@ -2,10 +2,15 @@
 import { useState } from "react";
 import { useWallet } from "@/app/context/WalletContext";
 import Navbar from "@/app/components/Navbar";
+import ButtonSpinner from "@/app/components/ButtonSpinner";
+import TxStatusBanner from "@/app/components/TxStatusBanner";
 import { useRouter } from "next/navigation";
-
-const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+import {
+  getPhaseLabel,
+  submitContractTransaction,
+  TxPhase,
+} from "@/app/lib/transactions";
+import { formatTxError } from "@/app/lib/errors";
 
 export default function CreateJob() {
   const { address, signTransaction } = useWallet();
@@ -16,6 +21,7 @@ export default function CreateJob() {
   const [autoReleaseDays, setAutoReleaseDays] = useState("7");
   const [milestones, setMilestones] = useState([{ amount: "" }]);
   const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<TxPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
 
@@ -89,13 +95,41 @@ export default function CreateJob() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signedXdr }),
+    setTxHash(null);
+    setPhase("building");
+
+    try {
+      const milestoneAmounts = normalizedMilestones.map((m) => BigInt(m.amount));
+      const autoReleaseSeconds =
+        BigInt(autoReleaseDays) * BigInt(24) * BigInt(60) * BigInt(60);
+
+      const hash = await submitContractTransaction({
+        method: "initialize",
+        args: [
+          { type: "address", value: address },
+          { type: "address", value: address },
+          { type: "address", value: freelancer },
+          { type: "address", value: arbiter },
+          { type: "address", value: token },
+          { type: "u64", value: autoReleaseSeconds.toString() },
+          {
+            type: "vec",
+            value: milestoneAmounts.map((a) => ({
+              type: "i128",
+              value: a.toString(),
+            })),
+          },
+        ],
+        sourceAddress: address,
+        signTransaction,
+        onPhase: setPhase,
       });
 
-      if (!submitRes.ok) throw new Error("Failed to submit transaction");
-      const { hash } = await submitRes.json();
+      setPhase("success");
       setTxHash(hash);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } catch (err) {
+      setPhase("error");
+      setError(formatTxError(err));
     } finally {
       setLoading(false);
     }
@@ -166,6 +200,67 @@ export default function CreateJob() {
            */}
           <div aria-live="polite" aria-atomic="true">
             {error && (
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-xl mx-auto px-4 sm:px-6 py-6 sm:py-12">
+        <h1 className="text-xl sm:text-2xl font-bold mb-6 sm:mb-8">Create New Job</h1>
+        {error && (
+          <div className="mb-5 rounded-lg bg-danger/40 border border-danger px-4 py-3 text-sm text-danger-soft" role="alert">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6" data-testid="create-job-form">
+          <div>
+            <label htmlFor="freelancer-address" className="block text-sm text-text-muted mb-1">Freelancer Address</label>
+            <input
+              id="freelancer-address"
+              className="w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-colors duration-200 hover:border-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+              value={freelancer}
+              onChange={(e) => setFreelancer(e.target.value)}
+              placeholder="G..."
+              required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label htmlFor="arbiter-address" className="block text-sm text-text-muted mb-1">Arbiter Address</label>
+            <input
+              id="arbiter-address"
+              className="w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-colors duration-200 hover:border-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+              value={arbiter}
+              onChange={(e) => setArbiter(e.target.value)}
+              placeholder="G..."
+              required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label htmlFor="token-address" className="block text-sm text-text-muted mb-1">Token Contract Address</label>
+            <input
+              id="token-address"
+              className="w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-colors duration-200 hover:border-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="C..."
+              required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label htmlFor="response-deadline" className="block text-sm text-text-muted mb-1">Response Deadline (days)</label>
+            <input
+              id="response-deadline"
+              type="number"
+              min="1"
+              className="w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-colors duration-200 hover:border-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+              value={autoReleaseDays}
+              onChange={(e) => setAutoReleaseDays(e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-text-muted mb-2">Milestones</label>
+            {hasNoMilestones ? (
               <div
                 id="form-error"
                 className="mb-5 rounded-lg bg-danger/40 border border-danger px-4 py-3 text-sm text-danger-soft animate-shake"
@@ -433,6 +528,23 @@ export default function CreateJob() {
               </button>
             </div>
           </form>
+          <TxStatusBanner
+            state={{ phase, error, txHash }}
+            successMessage="Job created successfully! Redirecting to dashboard..."
+          />
+
+          <button
+            type="submit"
+            disabled={loading || !address || hasNoMilestones || hasPartialMilestones}
+            className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-text-primary font-medium py-3 rounded-lg transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+          >
+            {loading && <ButtonSpinner className="h-4 w-4" />}
+            {loading ? getPhaseLabel(phase) || "Creating..." : "Create Job"}
+          </button>
+          {!address && (
+            <p className="text-center text-sm text-text-disabled">Connect your wallet to create a job</p>
+          )}
+        </form>
         </div>
 
         {/*
