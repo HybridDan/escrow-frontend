@@ -1,17 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import ButtonSpinner from "@/app/components/ButtonSpinner";
+import TxStatusBanner from "@/app/components/TxStatusBanner";
+import { ActionState } from "@/app/hooks/useActionStates";
+import { getPhaseLabel } from "@/app/lib/transactions";
 
 interface Milestone {
-    index: number;
-    amount: string;
-    status: string;
+  index: number;
+  amount: string;
+  status: string;
+  releasedAmount?: string;
 }
 
 interface Props {
   milestone?: Milestone | null;
   isClient: boolean;
   isFreelancer: boolean;
+  partialReleaseState: ActionState;
+  claimAutoReleaseState: ActionState;
+  isPartialReleasePending: boolean;
+  isClaimAutoReleasePending: boolean;
+  onPartialRelease?: (index: number, amount: string) => void;
+  onClaimAutoRelease?: (index: number) => void;
   onMarkDelivered?: (i: number) => void;
   onApprove?: (i: number) => void;
   onDispute?: (i: number) => void;
@@ -26,12 +37,18 @@ const statusColor: Record<string, string> = {
 };
 
 export default function MilestoneCard({
-    milestone,
-    isClient,
-    isFreelancer,
-    onMarkDelivered,
-    onApprove,
-    onDispute,
+  milestone,
+  isClient,
+  isFreelancer,
+  partialReleaseState,
+  claimAutoReleaseState,
+  isPartialReleasePending,
+  isClaimAutoReleasePending,
+  onPartialRelease,
+  onClaimAutoRelease,
+  onMarkDelivered,
+  onApprove,
+  onDispute,
 }: Props) {
   if (
     !milestone ||
