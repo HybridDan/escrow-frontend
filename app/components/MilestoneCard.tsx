@@ -9,6 +9,19 @@ interface Milestone {
   releasedAmount?: string;
 }
 
+/**
+ * Field-level and general error messages surfaced inside the card.
+ *
+ * - `amount`  – shown beneath the amount value (e.g. "Amount must be greater than 0")
+ * - `status`  – shown beneath the status badge (e.g. "Unknown status value")
+ * - `general` – shown as a top-level alert banner above the card body
+ */
+export interface MilestoneCardErrors {
+  amount?: string;
+  status?: string;
+  general?: string;
+}
+
 interface Props {
   milestone?: Milestone | null;
   isClient: boolean;
@@ -17,6 +30,8 @@ interface Props {
   claimAutoReleaseState: ActionState;
   isPartialReleasePending: boolean;
   isClaimAutoReleasePending: boolean;
+  /** Optional field-level / general error messages to render inside the card. */
+  errors?: MilestoneCardErrors;
   onPartialRelease?: (index: number, amount: string) => void;
   onClaimAutoRelease?: (index: number) => void;
   onMarkDelivered?: (i: number) => void;
@@ -39,6 +54,7 @@ export default function MilestoneCard({
   milestone,
   isClient,
   isFreelancer,
+  errors,
   onMarkDelivered,
   onApprove,
   onDispute,
@@ -55,6 +71,8 @@ export default function MilestoneCard({
     return (
       <div
         data-testid="milestone-empty-state"
+        role="region"
+        aria-label="No milestones"
         className="border border-border-strong rounded-lg p-4 bg-surface-card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
       >
         <div className="min-w-0 space-y-1">
@@ -64,16 +82,29 @@ export default function MilestoneCard({
             track delivery and releases.
           </p>
         </div>
-        <span className="text-xs px-2 py-1 rounded-full border border-border-subtle bg-surface-field text-text-muted whitespace-nowrap">
+        <span
+          aria-label="Status: waiting for milestones"
+          className="text-xs px-2 py-1 rounded-full border border-border-subtle bg-surface-field text-text-muted whitespace-nowrap"
+        >
           Waiting for milestones
         </span>
       </div>
     );
   }
 
+  // Human-readable milestone number (1-based) used in aria labels
+  const milestoneNumber = milestone.index + 1;
+  const milestoneLabel = `Milestone ${milestoneNumber}`;
+
+  // Unique id for the error live region so buttons can reference it
+  const errorRegionId = `milestone-${milestone.index}-errors`;
+
   return (
     <div
       data-testid="milestone-card"
+      role="region"
+      aria-label={milestoneLabel}
+      aria-describedby={errors?.general ? errorRegionId : undefined}
       className="
         border border-border-strong rounded-lg p-4 bg-surface-card
         flex flex-col gap-3
@@ -83,28 +114,74 @@ export default function MilestoneCard({
         focus-within:outline-none focus-within:ring-2 focus-within:ring-accent-soft focus-within:ring-offset-2 focus-within:ring-offset-surface-page
       "
     >
+      {/* General error alert banner — aria-live so it announces dynamically */}
+      {errors?.general && (
+        <div
+          id={errorRegionId}
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          data-testid="milestone-card-error-alert"
+          className="w-full rounded-lg bg-danger/10 border border-danger/30 px-3 py-2 text-sm text-danger-soft sm:col-span-full"
+        >
+          {errors.general}
+        </div>
+      )}
+
       {/* Milestone info */}
       <div className="min-w-0">
-        <p className="text-sm text-text-muted">Milestone {milestone.index + 1}</p>
-        <p className="font-mono text-text-primary text-sm mt-1 truncate">
+        <p className="text-sm text-text-muted" aria-hidden="true">
+          {milestoneLabel}
+        </p>
+        <p
+          className="font-mono text-text-primary text-sm mt-1 truncate"
+          aria-label={`${milestoneLabel} amount: ${milestone.amount} stroops`}
+        >
           {milestone.amount} stroops
         </p>
+        {/* Amount field error */}
+        {errors?.amount && (
+          <p
+            role="alert"
+            aria-live="polite"
+            data-testid="milestone-card-amount-error"
+            className="mt-1 text-xs text-danger-soft"
+          >
+            {errors.amount}
+          </p>
+        )}
       </div>
 
       {/* Status badge + action buttons */}
       <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
-        <span
-          className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap transition-colors ${
-            statusColor[milestone.status] ?? "bg-surface-field text-text-muted border-border-subtle"
-          }`}
-        >
-          {milestone.status}
-        </span>
+        <div className="flex flex-col items-start gap-1">
+          <span
+            aria-label={`${milestoneLabel} status: ${milestone.status}`}
+            className={`text-xs px-2 py-1 rounded-full border whitespace-nowrap transition-colors ${
+              statusColor[milestone.status] ?? "bg-surface-field text-text-muted border-border-subtle"
+            }`}
+          >
+            {milestone.status}
+          </span>
+          {/* Status field error */}
+          {errors?.status && (
+            <p
+              role="alert"
+              aria-live="polite"
+              data-testid="milestone-card-status-error"
+              className="text-xs text-warning-soft"
+            >
+              {errors.status}
+            </p>
+          )}
+        </div>
 
         {isFreelancer && milestone.status === "Pending" && (
           <button
             onClick={() => onMarkDelivered?.(milestone.index)}
             disabled={!onMarkDelivered}
+            aria-disabled={!onMarkDelivered}
+            aria-label={`Mark ${milestoneLabel} as delivered`}
             className={`${baseBtn} bg-info-soft text-text-primary hover:bg-info-soft/80 active:scale-[0.97] focus-visible:ring-info-soft disabled:hover:bg-info-soft disabled:active:scale-100`}
           >
             Mark Delivered
@@ -115,6 +192,8 @@ export default function MilestoneCard({
           <button
             onClick={() => onApprove?.(milestone.index)}
             disabled={!onApprove}
+            aria-disabled={!onApprove}
+            aria-label={`Approve ${milestoneLabel}`}
             className={`${baseBtn} bg-success text-text-primary hover:bg-success/80 active:scale-[0.97] focus-visible:ring-success-soft disabled:hover:bg-success disabled:active:scale-100`}
           >
             Approve
@@ -126,6 +205,8 @@ export default function MilestoneCard({
             <button
               onClick={() => onDispute?.(milestone.index)}
               disabled={!onDispute}
+              aria-disabled={!onDispute}
+              aria-label={`Dispute ${milestoneLabel}`}
               className={`${baseBtn} bg-danger text-text-primary hover:bg-danger/80 active:scale-[0.97] focus-visible:ring-danger-soft disabled:hover:bg-danger disabled:active:scale-100`}
             >
               Dispute
