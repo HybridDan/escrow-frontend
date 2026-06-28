@@ -59,7 +59,7 @@ describe("MilestoneCard", () => {
     );
 
     expect(screen.getByTestId("milestone-card")).toHaveClass("bg-surface-card");
-    expect(screen.getByRole("button", { name: "Mark Delivered" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark milestone \d+ as delivered/i })).toBeInTheDocument();
   });
 
   it("keeps empty-state layout spacing stable across breakpoints", () => {

@@ -175,6 +175,10 @@ export default function CreateJob() {
             <p className="text-text-muted text-sm mb-6">
               Your escrow job is live on Stellar testnet.
             </p>
+          <div className="text-center px-4 py-12">
+            <div className="text-success-soft text-5xl mb-4" aria-hidden="true">✓</div>
+            <h1 className="text-xl font-bold mb-2">Job Created!</h1>
+            <p className="text-text-muted text-sm mb-6">Your escrow job is live on Stellar testnet.</p>
             <a
               href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
               target="_blank"
@@ -556,6 +560,7 @@ export default function CreateJob() {
               <p className="text-center text-sm text-text-disabled" role="status">
                 Connect your wallet to create a job
               </p>
+              <p className="text-center text-sm text-text-muted">Connect your wallet to create a job</p>
             )}
 
             {/*
