@@ -82,6 +82,8 @@ export default function MilestoneCard({
   onMarkDelivered,
   onApprove,
   onDispute,
+  onClaimAutoRelease,
+  isClaimAutoReleasePending,
   ...unusedProps
 }: Props) {
   void unusedProps;
@@ -122,6 +124,9 @@ export default function MilestoneCard({
 
   // Unique id for the error live region so buttons can reference it
   const errorRegionId = `milestone-${milestone.index}-errors`;
+
+  const isDeadlineElapsed =
+    typeof autoReleaseDeadline === "number" && autoReleaseDeadline <= Date.now();
 
   const isPartiallyReleased = milestone.status === "PartiallyReleased";
   const releasePercent = isPartiallyReleased
@@ -286,6 +291,18 @@ export default function MilestoneCard({
               Dispute
             </button>
           )}
+
+        {isFreelancer && milestone.status === "Delivered" && isDeadlineElapsed && (
+          <button
+            onClick={() => onClaimAutoRelease?.(milestone.index)}
+            disabled={!onClaimAutoRelease || isClaimAutoReleasePending}
+            aria-disabled={!onClaimAutoRelease || isClaimAutoReleasePending}
+            aria-label={`Claim auto-release for ${milestoneLabel}`}
+            className={`${baseBtn} bg-success-soft text-surface-page font-medium hover:bg-success-soft/80 active:scale-[0.97] focus-visible:ring-success-soft disabled:hover:bg-success-soft disabled:active:scale-100`}
+          >
+            {isClaimAutoReleasePending ? "Claiming..." : "Claim Auto-Release"}
+          </button>
+        )}
       </div>
     </div>
   );
