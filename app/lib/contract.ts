@@ -20,6 +20,10 @@ export function getContract() {
 }
 
 export async function buildTx(sourceAddress: string, operation: Operation) {
+export async function buildTx(
+  sourceAddress: string,
+  operation: Parameters<TransactionBuilder["addOperation"]>[0]
+) {
   const account = await server.getAccount(sourceAddress);
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
