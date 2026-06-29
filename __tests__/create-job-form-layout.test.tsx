@@ -107,8 +107,8 @@ describe("CreateJob form — layout", () => {
     it("renders Freelancer Address input with placeholder 'G...'", () => {
       render(<CreateJob />);
       expect(
-        screen.getByPlaceholderText("G...", { exact: false })
-      ).toBeInTheDocument();
+  screen.getByLabelText(/Freelancer Address/i)
+).toBeInTheDocument();
     });
 
     it("renders the Token Contract Address field as a select (token whitelist dropdown)", () => {

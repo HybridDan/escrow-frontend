@@ -44,9 +44,21 @@ export default function AdminPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (address) fetchWhitelist();
-  }, [address, fetchWhitelist]);
+useEffect(() => {
+  let active = true;
+
+  if (address) {
+    Promise.resolve().then(() => {
+      if (active) {
+        fetchWhitelist();
+      }
+    });
+  }
+
+  return () => {
+    active = false;
+  };
+}, [address, fetchWhitelist]);
 
   const executeTx = async (
     actionKey: string,
