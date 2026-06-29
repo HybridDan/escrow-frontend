@@ -109,7 +109,7 @@ export default function MilestoneCard({
         data-testid="milestone-empty-state"
         role="region"
         aria-label="No milestones"
-        className="border border-border-strong rounded-lg p-4 bg-surface-card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+        className="max-h-[85vh] overflow-y-auto sm:max-h-none sm:overflow-visible border border-border-strong rounded-lg p-4 bg-surface-card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
       >
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-semibold text-text-secondary">No milestones available</p>
@@ -147,6 +147,7 @@ export default function MilestoneCard({
       aria-label={milestoneLabel}
       aria-describedby={errors?.general ? errorRegionId : undefined}
       className="
+        max-h-[85vh] overflow-y-auto sm:max-h-none sm:overflow-visible
         border border-border-strong rounded-lg p-4 bg-surface-card
         flex flex-col gap-3
         sm:flex-row sm:items-center sm:justify-between sm:gap-4
