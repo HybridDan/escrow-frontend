@@ -15,7 +15,7 @@ import { formatTxError } from "@/app/lib/errors";
 type WizardSection = "details" | "milestones" | "review";
 
 const inputClassName =
-  "w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-all duration-200 hover:border-accent-soft hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border-subtle disabled:hover:bg-surface-field";
+  "w-full bg-surface-field border border-border-subtle rounded-lg px-4 py-2 text-sm text-text-primary placeholder:text-text-disabled transition-colors duration-200 hover:border-accent-soft hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border-subtle disabled:hover:bg-surface-field";
 
 const buttonClassName =
   "inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100";
@@ -175,10 +175,6 @@ export default function CreateJob() {
             <p className="text-text-muted text-sm mb-6">
               Your escrow job is live on Stellar testnet.
             </p>
-          <div className="text-center px-4 py-12">
-            <div className="text-success-soft text-5xl mb-4" aria-hidden="true">✓</div>
-            <h1 className="text-xl font-bold mb-2">Job Created!</h1>
-            <p className="text-text-muted text-sm mb-6">Your escrow job is live on Stellar testnet.</p>
             <a
               href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
               target="_blank"
@@ -211,9 +207,50 @@ export default function CreateJob() {
 
       <main className="flex-1 overflow-y-auto flex flex-col" id="main-content">
         <div className="max-w-xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-12 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold mb-6 sm:mb-8 text-text-primary">
+          <h1 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4 text-text-primary">
             Create New Job
           </h1>
+          <p className="mb-6 text-sm leading-6 text-text-muted">
+            Configure counterparties, funding structure, and delivery expectations before publishing the escrow job.
+          </p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="wizard-step-list">
+            {[
+              {
+                id: "details" as const,
+                label: "1. Details",
+                helper: "Participants and funding",
+              },
+              {
+                id: "milestones" as const,
+                label: "2. Scope",
+                helper: "Assets, requirements, milestones",
+              },
+              {
+                id: "review" as const,
+                label: "3. Review",
+                helper: "Check before submitting",
+              },
+            ].map((section) => {
+              const isActive = activeSection === section.id;
+
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setActiveSection(section.id)}
+                  aria-pressed={isActive}
+                  className={`${buttonClassName} flex-col items-start gap-1 border px-4 py-3 text-left ${
+                    isActive
+                      ? "border-accent-soft bg-accent/10 text-text-primary shadow-sm"
+                      : "border-border-subtle bg-surface-card text-text-secondary hover:border-accent-soft hover:bg-surface-card/90"
+                  }`}
+                >
+                  <span>{section.label}</span>
+                  <span className="text-xs font-normal text-text-muted">{section.helper}</span>
+                </button>
+              );
+            })}
+          </div>
 
           {/*
            * aria-live="polite" announces error messages to screen readers
@@ -468,9 +505,10 @@ export default function CreateJob() {
                 </div>
 
                 {/* Milestones */}
-                <div>
+                <fieldset>
+                  <legend className="sr-only">Milestones</legend>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="block text-sm text-text-muted">Milestones</label>
+                    <span className="block text-sm text-text-muted" aria-hidden="true">Milestones</span>
                     <button
                       type="button"
                       onClick={addMilestone}
@@ -488,9 +526,14 @@ export default function CreateJob() {
                       testId="milestone-empty-state"
                     />
                   ) : (
-                    <div className="space-y-2" data-testid="milestone-list">
+                    <ul
+                      className="space-y-2"
+                      data-testid="milestone-list"
+                      role="list"
+                      aria-label="Milestone amounts"
+                    >
                       {normalizedMilestones.map((m, i) => (
-                        <div key={i} className="flex gap-2 items-center">
+                        <li key={i} className="flex gap-2 items-center animate-slide-in">
                           <input
                             className={`${inputClassName} flex-1 min-w-0`}
                             value={m.amount}
@@ -498,6 +541,8 @@ export default function CreateJob() {
                             onFocus={() => setActiveSection("milestones")}
                             placeholder={`Milestone ${i + 1} amount (stroops)`}
                             aria-label={`Milestone ${i + 1} amount`}
+                            aria-required="true"
+                            inputMode="numeric"
                             required
                             disabled={loading}
                           />
@@ -510,14 +555,20 @@ export default function CreateJob() {
                           >
                             ✕
                           </button>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
                   {hasPartialMilestones && !hasNoMilestones && (
-                    <p className="mt-2 text-xs text-warning-soft">Complete each milestone amount to continue.</p>
+                    <p
+                      className="mt-2 text-xs text-warning-soft"
+                      role="alert"
+                      aria-live="assertive"
+                    >
+                      Complete each milestone amount to continue.
+                    </p>
                   )}
-                </div>
+                </fieldset>
               </div>
             </section>
 
@@ -557,10 +608,13 @@ export default function CreateJob() {
             />
 
             {!address && (
-              <p className="text-center text-sm text-text-disabled" role="status">
+              <p
+                className="text-center text-sm text-text-disabled"
+                role="status"
+                aria-label="Connect your wallet to create a job"
+              >
                 Connect your wallet to create a job
               </p>
-              <p className="text-center text-sm text-text-muted">Connect your wallet to create a job</p>
             )}
 
             {/*

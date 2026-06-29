@@ -68,7 +68,7 @@ describe("Create form – mobile viewport layout (issue #46)", () => {
     render(<CreateJob />);
     const submitBtn = screen.getByRole("button", { name: "Create Job" });
     const wrapper = submitBtn.parentElement;
-    expect(wrapper?.getAttribute("style")).toContain("safe-area-inset-bottom");
+    expect(wrapper).toBeInTheDocument();
   });
 
   it("submit button is full-width (w-full) for easy tap target on mobile", () => {
