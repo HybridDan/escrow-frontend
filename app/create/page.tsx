@@ -14,6 +14,14 @@ import {
 import { fetchWhitelistedTokens, tokenLabel, WhitelistToken } from "@/app/lib/whitelist";
 import { formatTxError } from "@/app/lib/errors";
 
+const isValidStellarPublicKey = (address: string) => {
+  return /^G[A-Z0-9]{55}$/.test(address);
+};
+
+const isValidContractAddress = (address: string) => {
+  return /^C[A-Z0-9]{55}$/.test(address);
+};
+
 type WizardSection = "details" | "milestones" | "review";
 
 const inputClassName =
@@ -71,6 +79,10 @@ export default function CreateJob() {
   const [whitelist, setWhitelist] = useState<WhitelistToken[]>([]);
   const [whitelistLoading, setWhitelistLoading] = useState(true);
   const [whitelistError, setWhitelistError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{
+    freelancer?: string;
+    arbiter?: string;
+  }>({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -131,7 +143,37 @@ export default function CreateJob() {
     (m) => m.amount.trim().length === 0
   );
 
-  const isSubmitDisabled = loading || !address || hasNoMilestones || hasPartialMilestones;
+  const validateAddress = (value: string, field: "freelancer" | "arbiter") => {
+    if (!value) {
+      return "This field is required.";
+    }
+    if (!isValidStellarPublicKey(value)) {
+      return "Must be a valid Stellar public key starting with 'G'.";
+    }
+    return undefined;
+  };
+
+  const handleFreelancerChange = (value: string) => {
+    setFreelancer(value);
+    const err = validateAddress(value, "freelancer");
+    setValidationErrors((prev) => ({ ...prev, freelancer: err }));
+  };
+
+  const handleArbiterChange = (value: string) => {
+    setArbiter(value);
+    const err = validateAddress(value, "arbiter");
+    setValidationErrors((prev) => ({ ...prev, arbiter: err }));
+  };
+
+  const isSubmitDisabled =
+    loading ||
+    !address ||
+    hasNoMilestones ||
+    hasPartialMilestones ||
+    !!validationErrors.freelancer ||
+    !!validationErrors.arbiter ||
+    !freelancer ||
+    !arbiter;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,6 +188,12 @@ export default function CreateJob() {
     }
     if (!token || !whitelist.some((option) => option.address === token)) {
       setError("Select an accepted token before creating a job.");
+      return;
+    }
+    const freelancerErr = validateAddress(freelancer, "freelancer");
+    const arbiterErr = validateAddress(arbiter, "arbiter");
+    if (freelancerErr || arbiterErr) {
+      setValidationErrors({ freelancer: freelancerErr, arbiter: arbiterErr });
       return;
     }
     setLoading(true);
@@ -335,14 +383,17 @@ export default function CreateJob() {
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
-                    className={inputClassName}
+                    className={`${inputClassName} ${validationErrors.freelancer ? "border-danger" : ""}`}
                     value={freelancer}
-                    onChange={(e) => setFreelancer(e.target.value)}
+                    onChange={(e) => handleFreelancerChange(e.target.value)}
                     onFocus={() => setActiveSection("details")}
                     placeholder="G..."
                     required
                     disabled={loading}
                   />
+                  {validationErrors.freelancer && (
+                    <p className="mt-1 text-xs text-danger-soft">{validationErrors.freelancer}</p>
+                  )}
                 </div>
 
                 {/* Arbiter Address */}
@@ -359,14 +410,17 @@ export default function CreateJob() {
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
-                    className={inputClassName}
+                    className={`${inputClassName} ${validationErrors.arbiter ? "border-danger" : ""}`}
                     value={arbiter}
-                    onChange={(e) => setArbiter(e.target.value)}
+                    onChange={(e) => handleArbiterChange(e.target.value)}
                     onFocus={() => setActiveSection("details")}
                     placeholder="G..."
                     required
                     disabled={loading}
                   />
+                  {validationErrors.arbiter && (
+                    <p className="mt-1 text-xs text-danger-soft">{validationErrors.arbiter}</p>
+                  )}
                 </div>
 
                 {/* Token Contract Address */}
