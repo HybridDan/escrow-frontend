@@ -13,6 +13,7 @@ import {
 } from "@/app/lib/transactions";
 import { fetchWhitelistedTokens, tokenLabel, WhitelistToken } from "@/app/lib/whitelist";
 import { formatTxError } from "@/app/lib/errors";
+import { parseDecimalToBaseUnits } from "@/app/lib/amounts";
 
 type WizardSection = "details" | "milestones" | "review";
 
@@ -130,6 +131,9 @@ export default function CreateJob() {
   const hasPartialMilestones = normalizedMilestones.some(
     (m) => m.amount.trim().length === 0
   );
+  const selectedToken = whitelist.find((option) => option.address === token) ?? null;
+  const selectedTokenDecimals = selectedToken?.decimals ?? 7;
+  const selectedTokenSymbol = selectedToken?.symbol ?? "XLM";
 
   const isSubmitDisabled = loading || !address || hasNoMilestones || hasPartialMilestones;
 
@@ -154,7 +158,9 @@ export default function CreateJob() {
     setPhase("building");
 
     try {
-      const milestoneAmounts = normalizedMilestones.map((m) => BigInt(m.amount));
+      const milestoneAmounts = normalizedMilestones.map((m) =>
+        parseDecimalToBaseUnits(m.amount, selectedTokenDecimals)
+      );
       const autoReleaseSeconds =
         BigInt(autoReleaseDays) * BigInt(24) * BigInt(60) * BigInt(60);
 
@@ -377,50 +383,57 @@ export default function CreateJob() {
                   >
                     Token Contract Address
                   </label>
-                  <input
-                    id="token-address"
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-required="true"
-                    className={inputClassName}
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    onFocus={() => setActiveSection("details")}
-                    placeholder="C..."
-                    required
-                    disabled={loading}
-                  />
-                  <label htmlFor="token-address" className="block text-sm text-text-muted mb-1">Token Contract Address</label>
                   {whitelistLoading ? (
                     <select
                       id="token-address"
                       className={inputClassName}
+                      aria-required="true"
                       disabled
                       aria-busy="true"
                     >
                       <option>Loading accepted tokens…</option>
                     </select>
                   ) : whitelistError ? (
-                    <p
-                      role="alert"
-                      data-testid="token-whitelist-error"
-                      className="text-sm text-danger-soft"
-                    >
-                      {whitelistError}
-                    </p>
+                    <>
+                      <select
+                        id="token-address"
+                        className={inputClassName}
+                        aria-required="true"
+                        disabled
+                      >
+                        <option>Whitelist unavailable</option>
+                      </select>
+                      <p
+                        role="alert"
+                        data-testid="token-whitelist-error"
+                        className="text-sm text-danger-soft"
+                      >
+                        {whitelistError}
+                      </p>
+                    </>
                   ) : whitelist.length === 0 ? (
-                    <p
-                      data-testid="token-whitelist-empty"
-                      className="text-sm text-text-muted"
-                    >
-                      No accepted tokens are configured for this contract yet. Ask an admin
-                      to whitelist a token before creating a job.
-                    </p>
+                    <>
+                      <select
+                        id="token-address"
+                        className={inputClassName}
+                        aria-required="true"
+                        disabled
+                      >
+                        <option>No tokens available</option>
+                      </select>
+                      <p
+                        data-testid="token-whitelist-empty"
+                        className="text-sm text-text-muted"
+                      >
+                        No accepted tokens are configured for this contract yet. Ask an admin
+                        to whitelist a token before creating a job.
+                      </p>
+                    </>
                   ) : (
                     <select
                       id="token-address"
                       className={inputClassName}
+                      aria-required="true"
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
                       onFocus={() => setActiveSection("details")}
@@ -612,9 +625,12 @@ export default function CreateJob() {
                             value={m.amount}
                             onChange={(e) => updateMilestone(i, e.target.value)}
                             onFocus={() => setActiveSection("milestones")}
-                            placeholder={`Milestone ${i + 1} amount (stroops)`}
+                            placeholder={`Milestone ${i + 1} amount (${selectedTokenSymbol})`}
                             aria-label={`Milestone ${i + 1} amount`}
                             aria-required="true"
+                            type="number"
+                            min="0"
+                            step="any"
                             inputMode="numeric"
                             required
                             disabled={loading}
@@ -641,6 +657,10 @@ export default function CreateJob() {
                       Complete each milestone amount to continue.
                     </p>
                   )}
+                  <p className="mt-2 text-xs text-text-muted">
+                    Amounts are entered in {selectedTokenSymbol} and converted to base units
+                    ({selectedTokenDecimals} decimals) when submitting.
+                  </p>
                 </fieldset>
               </div>
             </section>

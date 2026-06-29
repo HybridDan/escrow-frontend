@@ -3,6 +3,7 @@
 import { ActionState } from "@/app/hooks/useActionStates";
 import CountdownTimer from "@/app/components/CountdownTimer";
 import TxStatusBanner from "@/app/components/TxStatusBanner";
+import { formatBaseUnits } from "@/app/lib/amounts";
 
 interface Milestone {
   index: number;
@@ -36,6 +37,8 @@ interface Props {
   claimAutoReleaseState: ActionState;
   isPartialReleasePending: boolean;
   isClaimAutoReleasePending: boolean;
+  amountDecimals?: number;
+  amountSymbol?: string;
   /** Optional field-level / general error messages to render inside the card. */
   errors?: MilestoneCardErrors;
   /**
@@ -88,6 +91,8 @@ export default function MilestoneCard({
   onResolveDispute,
   errors,
   autoReleaseDeadline,
+  amountDecimals = 7,
+  amountSymbol = "XLM",
   onMarkDelivered,
   onApprove,
   onDispute,
@@ -136,6 +141,10 @@ export default function MilestoneCard({
   const errorRegionId = `milestone-${milestone.index}-errors`;
 
   const isPartiallyReleased = milestone.status === "PartiallyReleased";
+  const displayAmount = formatBaseUnits(milestone.amount, { decimals: amountDecimals });
+  const displayReleasedAmount = milestone.releasedAmount
+    ? formatBaseUnits(milestone.releasedAmount, { decimals: amountDecimals })
+    : null;
   const releasePercent = isPartiallyReleased
     ? getReleasePercent(milestone.releasedAmount, milestone.amount)
     : null;
@@ -176,9 +185,9 @@ export default function MilestoneCard({
         </p>
         <p
           className="font-mono text-text-primary text-sm mt-1 truncate"
-          aria-label={`${milestoneLabel} amount: ${milestone.amount} stroops`}
+          aria-label={`${milestoneLabel} amount: ${displayAmount} ${amountSymbol}`}
         >
-          {milestone.amount} stroops
+          {displayAmount} {amountSymbol}
         </p>
         {/* Amount field error */}
         {errors?.amount && (
@@ -224,9 +233,9 @@ export default function MilestoneCard({
             </div>
             {/* Released amount vs total in stroops */}
             <p className="text-xs text-text-muted font-mono">
-              <span className="text-orange-400">{milestone.releasedAmount}</span>
+              <span className="text-orange-400">{displayReleasedAmount}</span>
               {" / "}
-              {milestone.amount} stroops
+              {displayAmount} {amountSymbol}
             </p>
           </div>
         )}
