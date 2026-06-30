@@ -620,7 +620,7 @@ describe("MilestoneCard — button click handler invocation", () => {
     fireEvent.click(btn);
     expect(handler).not.toHaveBeenCalled();
   });
-
+});
 
 // ===========================================================================
 // 9. Action button — structural CSS design-token classes
