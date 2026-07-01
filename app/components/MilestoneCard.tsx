@@ -91,6 +91,8 @@ export default function MilestoneCard({
   onMarkDelivered,
   onApprove,
   onDispute,
+  onClaimAutoRelease,
+  isClaimAutoReleasePending,
   ...unusedProps
 }: Props) {
   void unusedProps;
@@ -134,6 +136,9 @@ export default function MilestoneCard({
 
   // Unique id for the error live region so buttons can reference it
   const errorRegionId = `milestone-${milestone.index}-errors`;
+
+  const isDeadlineElapsed =
+    typeof autoReleaseDeadline === "number" && autoReleaseDeadline <= Date.now();
 
   const isPartiallyReleased = milestone.status === "PartiallyReleased";
   const releasePercent = isPartiallyReleased
