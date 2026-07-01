@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ActionState } from "@/app/hooks/useActionStates";
 import CountdownTimer from "@/app/components/CountdownTimer";
 import TxStatusBanner from "@/app/components/TxStatusBanner";
+import ButtonSpinner from "@/app/components/ButtonSpinner";
 
 interface Milestone {
   index: number;
@@ -81,6 +82,20 @@ function getReleasePercent(
   return Math.min(100, Math.max(0, Math.round((released / total) * 100)));
 }
 
+/**
+ * Compute the unreleased balance (in stroops) for a milestone.
+ * Returns null if the total or released amount isn't a valid integer string.
+ */
+function unreleasedBalance(milestone: Milestone): bigint | null {
+  try {
+    const total = BigInt(milestone.amount);
+    const released = BigInt(milestone.releasedAmount ?? "0");
+    return total - released;
+  } catch {
+    return null;
+  }
+}
+
 export default function MilestoneCard({
   milestone,
   isClient,
@@ -96,6 +111,9 @@ export default function MilestoneCard({
   onDispute,
   onClaimAutoRelease,
   isClaimAutoReleasePending,
+  partialReleaseState,
+  isPartialReleasePending,
+  onPartialRelease,
   ...unusedProps
 }: Props) {
   void unusedProps;
@@ -123,7 +141,7 @@ export default function MilestoneCard({
       return;
     }
 
-    if (parsed <= 0n) {
+    if (parsed <= BigInt(0)) {
       setPartialAmtError("Amount must be greater than 0.");
       return;
     }
