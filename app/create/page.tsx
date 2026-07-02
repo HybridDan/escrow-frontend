@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWallet } from "@/app/context/WalletContext";
 import Navbar from "@/app/components/Navbar";
 import ButtonSpinner from "@/app/components/ButtonSpinner";
@@ -11,8 +11,13 @@ import {
   submitContractTransaction,
   TxPhase,
 } from "@/app/lib/transactions";
-import { fetchWhitelistedTokens, tokenLabel, WhitelistToken } from "@/app/lib/whitelist";
+import {
+  fetchWhitelistedTokens,
+  tokenLabel,
+  WhitelistToken,
+} from "@/app/lib/whitelist";
 import { formatTxError } from "@/app/lib/errors";
+import { parseDecimalToBaseUnits } from "@/app/lib/amounts";
 
 type WizardSection = "details" | "milestones" | "review";
 
@@ -60,7 +65,11 @@ export default function CreateJob() {
   const [freelancer, setFreelancer] = useState("");
   const [arbiter, setArbiter] = useState("");
   const [token, setToken] = useState("");
+  const [freelancerError, setFreelancerError] = useState("");
+  const [arbiterError, setArbiterError] = useState("");
+  const [tokenError, setTokenError] = useState("");
   const [autoReleaseDays, setAutoReleaseDays] = useState("7");
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
   const [acceptedAssets, setAcceptedAssets] = useState<string[]>([]);
   const [requirements, setRequirements] = useState<string[]>([]);
   const [milestones, setMilestones] = useState([{ amount: "" }]);
@@ -71,6 +80,11 @@ export default function CreateJob() {
   const [whitelist, setWhitelist] = useState<WhitelistToken[]>([]);
   const [whitelistLoading, setWhitelistLoading] = useState(true);
   const [whitelistError, setWhitelistError] = useState<string | null>(null);
+
+  // Refs for tab-panel sections — used for programmatic focus on tab activation
+  const detailsPanelRef = useRef<HTMLDivElement>(null);
+  const milestonesPanelRef = useRef<HTMLDivElement>(null);
+  const reviewPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,7 +108,9 @@ export default function CreateJob() {
 
   const addAcceptedAsset = () => setAcceptedAssets([...acceptedAssets, ""]);
   const removeAcceptedAsset = (index: number) =>
-    setAcceptedAssets(acceptedAssets.filter((_, currentIndex) => currentIndex !== index));
+    setAcceptedAssets(
+      acceptedAssets.filter((_, currentIndex) => currentIndex !== index),
+    );
   const updateAcceptedAsset = (index: number, value: string) => {
     const updated = [...acceptedAssets];
     updated[index] = value;
@@ -103,7 +119,9 @@ export default function CreateJob() {
 
   const addRequirement = () => setRequirements([...requirements, ""]);
   const removeRequirement = (index: number) =>
-    setRequirements(requirements.filter((_, currentIndex) => currentIndex !== index));
+    setRequirements(
+      requirements.filter((_, currentIndex) => currentIndex !== index),
+    );
   const updateRequirement = (index: number, value: string) => {
     const updated = [...requirements];
     updated[index] = value;
@@ -135,50 +153,141 @@ export default function CreateJob() {
   };
 
   const normalizedMilestones = milestones.filter(
-    (m): m is { amount: string } => !!m && typeof m.amount === "string"
+    (m): m is { amount: string } => !!m && typeof m.amount === "string",
   );
-  const normalizedAssets = acceptedAssets.filter((asset) => asset.trim().length > 0);
+  const normalizedAssets = acceptedAssets.filter(
+    (asset) => asset.trim().length > 0,
+  );
   const normalizedRequirements = requirements.filter(
-    (requirement) => requirement.trim().length > 0
+    (requirement) => requirement.trim().length > 0,
   );
   const hasNoMilestones = normalizedMilestones.length === 0;
   const hasPartialMilestones = normalizedMilestones.some(
     (m) => m.amount.trim().length === 0
   );
+  const hasInvalidMilestones = normalizedMilestones.some(m => {
+    const trimmed = m.amount.trim();
+    if (trimmed.length === 0) return false;
+    return !/^[0-9]+$/.test(trimmed);
+  });
 
-  const isSubmitDisabled = loading || !address || hasNoMilestones || hasPartialMilestones;
+  const hasValidationErrors = !!freelancerError || !!arbiterError || !!tokenError;
+  const isSubmitDisabled = loading || !address || hasNoMilestones || hasPartialMilestones || hasValidationErrors;
+
+  const validateFreelancer = (val: string) => {
+    if (val && !/^G[A-Z2-7]{55}$/.test(val)) {
+      setFreelancerError("Invalid Stellar public key format");
+    } else {
+      setFreelancerError("");
+    }
+  };
+
+  const validateArbiter = (val: string) => {
+    if (val && !/^G[A-Z2-7]{55}$/.test(val)) {
+      setArbiterError("Invalid Stellar public key format");
+    } else {
+      setArbiterError("");
+    }
+  };
+
+  const validateToken = (val: string) => {
+    if (val && !/^C[A-Z2-7]{55}$/.test(val)) {
+      setTokenError("Invalid Soroban contract ID format");
+    } else {
+      setTokenError("");
+    }
+  };
+
+  const validateDeadline = (value: string): string | null => {
+    if (value.trim() === "") {
+      return "Response deadline is required";
+    }
+    const num = Number(value);
+    if (!Number.isInteger(num)) {
+      return "Must be a whole number of days";
+    }
+    if (num < 1) {
+      return "Must be at least 1 day";
+    }
+    if (num > 365) {
+      return "Must be at most 365 days";
+    }
+    return null;
+  };
+
+  const handleDeadlineChange = (value: string) => {
+    setAutoReleaseDays(value);
+    // Clear error on change, will re-validate on blur
+    if (deadlineError) {
+      setDeadlineError(null);
+    }
+  };
+
+  const handleDeadlineBlur = () => {
+    const error = validateDeadline(autoReleaseDays);
+    setDeadlineError(error);
+  };
+
+  // Wizard tab sections config
+  const wizardSections: { id: WizardSection; label: string; helper: string; panelId: string; tabId: string }[] = [
+    {
+      id: "details",
+      label: "1. Details",
+      helper: "Participants and funding",
+      panelId: "panel-details",
+      tabId: "tab-details",
+    },
+    {
+      id: "milestones",
+      label: "2. Scope",
+      helper: "Assets, requirements, milestones",
+      panelId: "panel-milestones",
+      tabId: "tab-milestones",
+    },
+    {
+      id: "review",
+      label: "3. Review",
+      helper: "Check before submitting",
+      panelId: "panel-review",
+      tabId: "tab-review",
+    },
+  ];
+
+  /**
+   * Keyboard handler for the tablist — implements ARIA tab pattern:
+   * ArrowLeft/ArrowRight cycle through tabs and move focus.
+   */
+  const handleTabKeyDown = (
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number
+  ) => {
+    const count = wizardSections.length;
+    let nextIndex: number | null = null;
+    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % count;
+    if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + count) % count;
+    if (e.key === "Home") nextIndex = 0;
+    if (e.key === "End") nextIndex = count - 1;
+    if (nextIndex !== null) {
+      e.preventDefault();
+      const nextSection = wizardSections[nextIndex];
+      setActiveSection(nextSection.id);
+      // Move DOM focus to the newly activated tab
+      document.getElementById(nextSection.tabId)?.focus();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address) return;
-    
-    // Validate all fields
-    const errors: Record<string, string> = {};
-    errors.freelancer = validateField("freelancer", freelancer);
-    errors.arbiter = validateField("arbiter", arbiter);
-    errors.token = validateField("token", token);
-    errors.autoReleaseDays = validateField("autoReleaseDays", autoReleaseDays);
-    normalizedMilestones.forEach((m, i) => {
-      errors[`milestone-${i}`] = validateField(`milestone-${i}`, m.amount);
-    });
 
-    // Mark all fields as touched
-    const allTouched: Record<string, boolean> = {};
-    allTouched.freelancer = true;
-    allTouched.arbiter = true;
-    allTouched.token = true;
-    allTouched.autoReleaseDays = true;
-    normalizedMilestones.forEach((_, i) => {
-      allTouched[`milestone-${i}`] = true;
-    });
-    setTouched(allTouched);
-    setFieldErrors(errors);
-
-    const hasErrors = Object.values(errors).some(err => err);
-    if (hasErrors) {
+    // Validate deadline on submit
+    const deadlineValidationError = validateDeadline(autoReleaseDays);
+    if (deadlineValidationError) {
+      setDeadlineError(deadlineValidationError);
+      setError("Please fix the response deadline before creating a job.");
       return;
     }
-    
+
     if (hasNoMilestones) {
       setError("Add at least one milestone amount before creating a job.");
       return;
@@ -187,8 +296,20 @@ export default function CreateJob() {
       setError("Complete each milestone amount before creating a job.");
       return;
     }
+    if (hasInvalidMilestones) {
+      setError("Milestone amounts must contain only numeric characters.");
+      return;
+    }
     if (!token || !whitelist.some((option) => option.address === token)) {
       setError("Select an accepted token before creating a job.");
+      return;
+    }
+    validateFreelancer(freelancer);
+    validateArbiter(arbiter);
+    if (!freelancer || !arbiter || !/^G[A-Z2-7]{55}$/.test(freelancer) || !/^G[A-Z2-7]{55}$/.test(arbiter)) {
+      if (!freelancer) setFreelancerError("This field is required.");
+      if (!arbiter) setArbiterError("This field is required.");
+      setError("Please fix the address fields before creating a job.");
       return;
     }
     setLoading(true);
@@ -197,7 +318,13 @@ export default function CreateJob() {
     setPhase("building");
 
     try {
-      const milestoneAmounts = normalizedMilestones.map((m) => BigInt(m.amount));
+      const milestoneAmounts = normalizedMilestones.map((m) => {
+        const trimmed = m.amount.trim();
+        if (!/^[0-9]+$/.test(trimmed)) {
+          throw new Error("Invalid milestone amount");
+        }
+        return BigInt(trimmed);
+      });
       const autoReleaseSeconds =
         BigInt(autoReleaseDays) * BigInt(24) * BigInt(60) * BigInt(60);
 
@@ -283,34 +410,36 @@ export default function CreateJob() {
             Create New Job
           </h1>
           <p className="mb-6 text-sm leading-6 text-text-muted">
-            Configure counterparties, funding structure, and delivery expectations before publishing the escrow job.
+            Configure counterparties, funding structure, and delivery
+            expectations before publishing the escrow job.
           </p>
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="wizard-step-list">
-            {[
-              {
-                id: "details" as const,
-                label: "1. Details",
-                helper: "Participants and funding",
-              },
-              {
-                id: "milestones" as const,
-                label: "2. Scope",
-                helper: "Assets, requirements, milestones",
-              },
-              {
-                id: "review" as const,
-                label: "3. Review",
-                helper: "Check before submitting",
-              },
-            ].map((section) => {
-              const isActive = activeSection === section.id;
 
+          {/*
+           * Wizard navigation implemented as a proper ARIA tablist.
+           * - role="tablist" on the container
+           * - role="tab" + aria-selected + aria-controls on each button
+           * - Arrow-key navigation via handleTabKeyDown
+           * - Each corresponding section carries role="tabpanel" + aria-labelledby
+           */}
+          <div
+            role="tablist"
+            aria-label="Form sections"
+            className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3"
+            data-testid="wizard-step-list"
+          >
+            {wizardSections.map((section, index) => {
+              const isActive = activeSection === section.id;
               return (
                 <button
                   key={section.id}
+                  id={section.tabId}
                   type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={section.panelId}
+                  tabIndex={isActive ? 0 : -1}
                   onClick={() => setActiveSection(section.id)}
-                  aria-pressed={isActive}
+                  onKeyDown={(e) => handleTabKeyDown(e, index)}
                   className={`${buttonClassName} flex-col items-start gap-1 border px-4 py-3 text-left ${
                     isActive
                       ? "border-accent-soft bg-accent/10 text-text-primary shadow-sm"
@@ -318,22 +447,33 @@ export default function CreateJob() {
                   }`}
                 >
                   <span>{section.label}</span>
-                  <span className="text-xs font-normal text-text-muted">{section.helper}</span>
+                  <span className="text-xs font-normal text-text-muted">
+                    {section.helper}
+                  </span>
                 </button>
               );
             })}
           </div>
 
           {/*
-           * aria-live="polite" announces error messages to screen readers
-           * without interrupting the current read flow.
+           * Form-level error alert.
+           * role="alert" is sufficient — it implies aria-live="assertive" and
+           * aria-atomic="true". The outer wrapper is always rendered so AT
+           * registers it before any content is injected, enabling reliable
+           * announcement.
            */}
-          <div aria-live="polite" aria-atomic="true">
+          <div
+            id="form-error-region"
+            aria-live="assertive"
+            aria-atomic="true"
+            aria-relevant="additions removals"
+          >
             {error && (
               <div
                 id="form-error"
-                className="mb-5 rounded-lg bg-danger/40 border border-danger px-4 py-3 text-sm text-danger-soft animate-shake"
                 role="alert"
+                className="mb-5 rounded-lg bg-danger border border-danger-soft/40 px-4 py-3 text-sm text-danger-soft animate-shake"
+                data-testid="form-error-alert"
               >
                 {error}
               </div>
@@ -349,15 +489,31 @@ export default function CreateJob() {
             aria-busy={loading}
             noValidate
           >
-            <section className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm">
+            {/* ── Section 1: Job Details ──────────────────────────────────── */}
+            <section
+              id="panel-details"
+              role="tabpanel"
+              aria-labelledby="tab-details"
+              ref={detailsPanelRef}
+              tabIndex={-1}
+              className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+            >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-text-primary">Job details</h2>
-                  <p className="text-xs text-text-muted">Specify the counterparties and core escrow timing.</p>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    Job details
+                  </h2>
+                  <p className="text-xs text-text-muted">
+                    Specify the counterparties and core escrow timing.
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveSection("details")}
+                  onClick={() => {
+                    setActiveSection("details");
+                    detailsPanelRef.current?.focus();
+                  }}
+                  aria-label="Focus Job Details section"
                   className={`${buttonClassName} border border-border-subtle bg-surface-field px-3 py-2 text-text-secondary hover:border-accent-soft hover:text-text-primary`}
                 >
                   Focus section
@@ -378,14 +534,19 @@ export default function CreateJob() {
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
-                    className={inputClassName}
+                    className={`${inputClassName} ${freelancerError ? '!border-danger' : ''}`}
                     value={freelancer}
-                    onChange={(e) => setFreelancer(e.target.value)}
+                    onChange={(e) => {
+                      setFreelancer(e.target.value);
+                      validateFreelancer(e.target.value);
+                    }}
+                    onBlur={(e) => validateFreelancer(e.target.value)}
                     onFocus={() => setActiveSection("details")}
                     placeholder="G..."
                     required
                     disabled={loading}
                   />
+                  {freelancerError && <p className="text-sm text-danger-soft mt-1">{freelancerError}</p>}
                 </div>
 
                 {/* Arbiter Address */}
@@ -402,68 +563,94 @@ export default function CreateJob() {
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
-                    className={inputClassName}
+                    className={`${inputClassName} ${arbiterError ? '!border-danger' : ''}`}
                     value={arbiter}
-                    onChange={(e) => setArbiter(e.target.value)}
+                    onChange={(e) => {
+                      setArbiter(e.target.value);
+                      validateArbiter(e.target.value);
+                    }}
+                    onBlur={(e) => validateArbiter(e.target.value)}
                     onFocus={() => setActiveSection("details")}
                     placeholder="G..."
                     required
                     disabled={loading}
                   />
+                  {arbiterError && <p className="text-sm text-danger-soft mt-1">{arbiterError}</p>}
                 </div>
 
-                {/* Token Contract Address */}
+                {/*
+                 * Token selector — the text input and whitelist select share
+                 * the same state (token) but must have distinct IDs to avoid
+                 * duplicate-id violations and broken label associations.
+                 *
+                 * - input#token-manual: always visible, allows direct paste
+                 * - select#token-select: shown once the whitelist is loaded
+                 * - The label targets token-manual (primary control); the select
+                 *   is linked via aria-labelledby pointing at the shared label.
+                 * - Whitelist errors are associated to both controls via
+                 *   aria-describedby="token-whitelist-error".
+                 */}
                 <div>
                   <label
-                    htmlFor="token-address"
+                    id="token-label"
+                    htmlFor="token-manual"
                     className="block text-sm text-text-muted mb-1"
                   >
                     Token Contract Address
                   </label>
                   <input
-                    id="token-address"
+                    id="token-manual"
                     type="text"
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
+                    aria-describedby={whitelistError ? "token-whitelist-error" : undefined}
                     className={inputClassName}
                     value={token}
-                    onChange={(e) => setToken(e.target.value)}
+                    onChange={(e) => {
+                      setToken(e.target.value);
+                      validateToken(e.target.value);
+                    }}
+                    onBlur={(e) => validateToken(e.target.value)}
                     onFocus={() => setActiveSection("details")}
                     placeholder="C..."
                     required
                     disabled={loading}
                   />
-                  <label htmlFor="token-address" className="block text-sm text-text-muted mb-1">Token Contract Address</label>
                   {whitelistLoading ? (
                     <select
-                      id="token-address"
-                      className={inputClassName}
-                      disabled
+                      id="token-select"
+                      aria-labelledby="token-label"
                       aria-busy="true"
+                      className={`mt-2 ${inputClassName}`}
+                      disabled
                     >
                       <option>Loading accepted tokens…</option>
                     </select>
                   ) : whitelistError ? (
                     <p
+                      id="token-whitelist-error"
                       role="alert"
                       data-testid="token-whitelist-error"
-                      className="text-sm text-danger-soft"
+                      className="mt-1 text-sm text-danger-soft"
                     >
                       {whitelistError}
                     </p>
                   ) : whitelist.length === 0 ? (
                     <p
+                      id="token-whitelist-empty"
                       data-testid="token-whitelist-empty"
-                      className="text-sm text-text-muted"
+                      className="mt-1 text-sm text-text-muted"
+                      aria-live="polite"
                     >
-                      No accepted tokens are configured for this contract yet. Ask an admin
-                      to whitelist a token before creating a job.
+                      No accepted tokens are configured for this contract yet.
+                      Ask an admin to whitelist a token before creating a job.
                     </p>
                   ) : (
                     <select
-                      id="token-address"
-                      className={inputClassName}
+                      id="token-select"
+                      aria-labelledby="token-label"
+                      className={`mt-2 ${inputClassName}`}
                       value={token}
                       onChange={(e) => setToken(e.target.value)}
                       onFocus={() => setActiveSection("details")}
@@ -493,13 +680,17 @@ export default function CreateJob() {
                     type="number"
                     min="1"
                     aria-required="true"
-                    aria-describedby="deadline-hint"
                     className={inputClassName}
                     value={autoReleaseDays}
-                    onChange={(e) => setAutoReleaseDays(e.target.value)}
+                    onChange={(e) => handleDeadlineChange(e.target.value)}
+                    onBlur={handleDeadlineBlur}
                     onFocus={() => setActiveSection("details")}
                     required
                     disabled={loading}
+                    aria-invalid={!!deadlineError}
+                    aria-describedby={
+                      deadlineError ? "deadline-error" : "deadline-hint"
+                    }
                   />
                   <p id="deadline-hint" className="mt-1 text-xs text-text-disabled">
                     Funds auto-release after this many days if no dispute is raised.
@@ -508,15 +699,31 @@ export default function CreateJob() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm">
+            {/* ── Section 2: Scope & Release Plan ────────────────────────── */}
+            <section
+              id="panel-milestones"
+              role="tabpanel"
+              aria-labelledby="tab-milestones"
+              ref={milestonesPanelRef}
+              tabIndex={-1}
+              className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+            >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-text-primary">Scope and release plan</h2>
-                  <p className="text-xs text-text-muted">Document what will be funded and what completion requires.</p>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    Scope and release plan
+                  </h2>
+                  <p className="text-xs text-text-muted">
+                    Document what will be funded and what completion requires.
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveSection("milestones")}
+                  onClick={() => {
+                    setActiveSection("milestones");
+                    milestonesPanelRef.current?.focus();
+                  }}
+                  aria-label="Focus Scope and Release Plan section"
                   className={`${buttonClassName} border border-border-subtle bg-surface-field px-3 py-2 text-text-secondary hover:border-accent-soft hover:text-text-primary`}
                 >
                   Focus section
@@ -527,10 +734,20 @@ export default function CreateJob() {
                 {/* Accepted Assets */}
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="block text-sm text-text-muted">Accepted assets</label>
+                    {/*
+                     * This <span> labels the group visually; the list inputs
+                     * each carry their own aria-label so no htmlFor is needed.
+                     */}
+                    <span
+                      id="accepted-assets-label"
+                      className="block text-sm text-text-muted"
+                    >
+                      Accepted assets
+                    </span>
                     <button
                       type="button"
                       onClick={addAcceptedAsset}
+                      aria-label="Add accepted asset"
                       className={`${buttonClassName} text-accent-soft hover:text-accent-soft-hover rounded-sm px-0 py-0 active:scale-95`}
                     >
                       + Add Asset
@@ -545,13 +762,24 @@ export default function CreateJob() {
                       testId="asset-empty-state"
                     />
                   ) : (
-                    <div className="space-y-2" data-testid="asset-list">
+                    <div
+                      className="space-y-2"
+                      data-testid="asset-list"
+                      role="group"
+                      aria-labelledby="accepted-assets-label"
+                    >
                       {acceptedAssets.map((asset, index) => (
-                        <div key={`asset-${index}`} className="flex items-center gap-2">
+                        <div
+                          key={`asset-${index}`}
+                          className="flex items-center gap-2"
+                        >
                           <input
+                            id={`asset-input-${index}`}
                             className={`${inputClassName} flex-1 min-w-0`}
                             value={asset}
-                            onChange={(e) => updateAcceptedAsset(index, e.target.value)}
+                            onChange={(e) =>
+                              updateAcceptedAsset(index, e.target.value)
+                            }
                             onFocus={() => setActiveSection("milestones")}
                             placeholder={`Accepted asset ${index + 1}`}
                             aria-label={`Accepted asset ${index + 1}`}
@@ -575,10 +803,16 @@ export default function CreateJob() {
                 {/* Requirements */}
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="block text-sm text-text-muted">Requirements</label>
+                    <span
+                      id="requirements-label"
+                      className="block text-sm text-text-muted"
+                    >
+                      Requirements
+                    </span>
                     <button
                       type="button"
                       onClick={addRequirement}
+                      aria-label="Add requirement"
                       className={`${buttonClassName} text-accent-soft hover:text-accent-soft-hover rounded-sm px-0 py-0 active:scale-95`}
                     >
                       + Add Requirement
@@ -593,13 +827,24 @@ export default function CreateJob() {
                       testId="requirement-empty-state"
                     />
                   ) : (
-                    <div className="space-y-2" data-testid="requirement-list">
+                    <div
+                      className="space-y-2"
+                      data-testid="requirement-list"
+                      role="group"
+                      aria-labelledby="requirements-label"
+                    >
                       {requirements.map((requirement, index) => (
-                        <div key={`requirement-${index}`} className="flex items-center gap-2">
+                        <div
+                          key={`requirement-${index}`}
+                          className="flex items-center gap-2"
+                        >
                           <input
+                            id={`requirement-input-${index}`}
                             className={`${inputClassName} flex-1 min-w-0`}
                             value={requirement}
-                            onChange={(e) => updateRequirement(index, e.target.value)}
+                            onChange={(e) =>
+                              updateRequirement(index, e.target.value)
+                            }
                             onFocus={() => setActiveSection("milestones")}
                             placeholder={`Requirement ${index + 1}`}
                             aria-label={`Requirement ${index + 1}`}
@@ -621,13 +866,13 @@ export default function CreateJob() {
                 </div>
 
                 {/* Milestones */}
-                <fieldset>
-                  <legend className="sr-only">Milestones</legend>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="block text-sm text-text-muted" aria-hidden="true">Milestones</span>
+                <fieldset aria-describedby={hasPartialMilestones && !hasNoMilestones ? "milestone-warning" : undefined}>
+                  <legend className="block text-sm text-text-muted mb-2">Milestones</legend>
+                  <div className="mb-2 flex items-center justify-end">
                     <button
                       type="button"
                       onClick={addMilestone}
+                      aria-label="Add milestone"
                       className={`${buttonClassName} text-accent-soft hover:text-accent-soft-hover rounded-sm px-0 py-0 active:scale-95`}
                     >
                       + Add Milestone
@@ -651,15 +896,20 @@ export default function CreateJob() {
                       {normalizedMilestones.map((m, i) => (
                         <li key={i} className="flex gap-2 items-center animate-slide-in">
                           <input
+                            id={`milestone-input-${i}`}
                             className={`${inputClassName} flex-1 min-w-0`}
                             value={m.amount}
                             onChange={(e) => updateMilestone(i, e.target.value)}
                             onFocus={() => setActiveSection("milestones")}
                             placeholder={`Milestone ${i + 1} amount (stroops)`}
-                            aria-label={`Milestone ${i + 1} amount`}
+                            aria-label={`Milestone ${i + 1} amount in stroops`}
                             aria-required="true"
+                            type="number"
+                            min="0"
+                            step="any"
                             inputMode="numeric"
                             required
+                            pattern="^[0-9]+$"
                             disabled={loading}
                           />
                           <button
@@ -675,45 +925,80 @@ export default function CreateJob() {
                       ))}
                     </ul>
                   )}
-                  {hasPartialMilestones && !hasNoMilestones && (
-                    <p
-                      className="mt-2 text-xs text-warning-soft"
-                      role="alert"
-                      aria-live="assertive"
-                    >
-                      Complete each milestone amount to continue.
-                    </p>
-                  )}
+                  {/*
+                   * The warning paragraph is always rendered (empty when no
+                   * error) so AT registers the live region before content is
+                   * injected, ensuring reliable announcement.
+                   */}
+                  <p
+                    id="milestone-warning"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                    className={`mt-2 text-xs text-warning-soft transition-opacity duration-150 ${
+                      hasPartialMilestones && !hasNoMilestones ? "opacity-100" : "opacity-0 pointer-events-none"
+                    }`}
+                  >
+                    {hasPartialMilestones && !hasNoMilestones
+                      ? "Complete each milestone amount to continue."
+                      : ""}
+                  </p>
                 </fieldset>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm">
+            {/* ── Section 3: Review ───────────────────────────────────────── */}
+            <section
+              id="panel-review"
+              role="tabpanel"
+              aria-labelledby="tab-review"
+              ref={reviewPanelRef}
+              tabIndex={-1}
+              className="rounded-2xl border border-border-subtle bg-surface-card/70 p-5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page"
+            >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-text-primary">Review</h2>
-                  <p className="text-xs text-text-muted">Confirm the job has enough structure before sending the transaction.</p>
+                  <h2 className="text-base font-semibold text-text-primary">
+                    Review
+                  </h2>
+                  <p className="text-xs text-text-muted">
+                    Confirm the job has enough structure before sending the
+                    transaction.
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActiveSection("review")}
+                  onClick={() => {
+                    setActiveSection("review");
+                    reviewPanelRef.current?.focus();
+                  }}
+                  aria-label="Focus Review section"
                   className={`${buttonClassName} border border-border-subtle bg-surface-field px-3 py-2 text-text-secondary hover:border-accent-soft hover:text-text-primary`}
                 >
                   Focus section
                 </button>
               </div>
-              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3" data-testid="review-summary">
+              <dl
+                className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3"
+                data-testid="review-summary"
+              >
                 <div className="rounded-xl border border-border-subtle bg-surface-field px-4 py-3">
                   <dt className="text-text-muted">Accepted assets</dt>
-                  <dd className="mt-1 font-medium text-text-primary">{normalizedAssets.length}</dd>
+                  <dd className="mt-1 font-medium text-text-primary">
+                    {normalizedAssets.length}
+                  </dd>
                 </div>
                 <div className="rounded-xl border border-border-subtle bg-surface-field px-4 py-3">
                   <dt className="text-text-muted">Requirements</dt>
-                  <dd className="mt-1 font-medium text-text-primary">{normalizedRequirements.length}</dd>
+                  <dd className="mt-1 font-medium text-text-primary">
+                    {normalizedRequirements.length}
+                  </dd>
                 </div>
                 <div className="rounded-xl border border-border-subtle bg-surface-field px-4 py-3">
                   <dt className="text-text-muted">Milestones</dt>
-                  <dd className="mt-1 font-medium text-text-primary">{normalizedMilestones.length}</dd>
+                  <dd className="mt-1 font-medium text-text-primary">
+                    {normalizedMilestones.length}
+                  </dd>
                 </div>
               </dl>
             </section>
@@ -727,18 +1012,16 @@ export default function CreateJob() {
               <p
                 className="text-center text-sm text-text-disabled"
                 role="status"
-                aria-label="Connect your wallet to create a job"
+                aria-live="polite"
               >
                 Connect your wallet to create a job
               </p>
             )}
 
             {/*
-             * Issue #46 – sticky footer on mobile so the submit button stays
-             * visible without needing to scroll past the keyboard.
-             * Issue #45 – active:scale-[0.98] tactile press feedback.
-             * Issue #47 – semantic design-token classes throughout.
-             * Issue #40 – aria-disabled mirrors disabled state for AT.
+             * Sticky footer on mobile so the submit button stays visible
+             * without needing to scroll past the keyboard (Issue #46).
+             * active:scale-[0.98] for tactile press feedback (Issue #45).
              */}
             <div
               className="
@@ -755,6 +1038,7 @@ export default function CreateJob() {
                 disabled={isSubmitDisabled}
                 aria-disabled={isSubmitDisabled}
                 aria-label={loading ? "Creating job, please wait…" : "Create Job"}
+                aria-describedby={error ? "form-error" : undefined}
                 className={`${buttonClassName} w-full bg-accent hover:bg-accent-hover active:scale-[0.98] py-3 text-text-primary disabled:bg-accent disabled:hover:bg-accent`}
               >
                 {loading ? (
@@ -770,11 +1054,7 @@ export default function CreateJob() {
           </form>
         </div>
 
-        {/*
-         * Issue #46 – Bottom padding spacer so form content is never hidden
-         * behind the sticky button bar on mobile. On sm+ the bar is
-         * position:relative so no spacer is needed.
-         */}
+        {/* Bottom padding spacer — keeps form content clear of sticky button bar on mobile */}
         <div className="sm:hidden h-20" aria-hidden="true" />
       </main>
     </div>
