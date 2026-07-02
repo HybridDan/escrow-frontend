@@ -17,6 +17,7 @@ import {
   WhitelistToken,
 } from "@/app/lib/whitelist";
 import { formatTxError } from "@/app/lib/errors";
+import { parseDecimalToBaseUnits } from "@/app/lib/amounts";
 
 const isValidStellarPublicKey = (address: string) => {
   return /^G[A-Z0-9]{55}$/.test(address);
@@ -941,6 +942,9 @@ export default function CreateJob() {
                             placeholder={`Milestone ${i + 1} amount (stroops)`}
                             aria-label={`Milestone ${i + 1} amount in stroops`}
                             aria-required="true"
+                            type="number"
+                            min="0"
+                            step="any"
                             inputMode="numeric"
                             required
                             pattern="^[0-9]+$"
