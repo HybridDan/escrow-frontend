@@ -129,12 +129,27 @@ export default function CreateJob() {
   };
 
   const addMilestone = () => setMilestones([...milestones, { amount: "" }]);
-  const removeMilestone = (i: number) =>
+  const removeMilestone = (i: number) => {
     setMilestones(milestones.filter((_, idx) => idx !== i));
+    setTouched(prev => {
+      const newTouched = { ...prev };
+      delete newTouched[`milestone-${i}`];
+      return newTouched;
+    });
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[`milestone-${i}`];
+      return newErrors;
+    });
+  };
   const updateMilestone = (i: number, val: string) => {
     const updated = [...milestones];
     updated[i].amount = val;
     setMilestones(updated);
+    // Clear error when user types
+    if (fieldErrors[`milestone-${i}`]) {
+      setFieldErrors(prev => ({ ...prev, [`milestone-${i}`]: "" }));
+    }
   };
 
   const normalizedMilestones = milestones.filter(
@@ -363,7 +378,7 @@ export default function CreateJob() {
               href={`https://stellar.expert/explorer/testnet/tx/${txHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent-soft hover:text-accent-soft-hover underline text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-2 focus-visible:ring-offset-surface-page rounded-sm"
+              className="text-accent-soft hover:text-accent-soft-hover underline text-sm transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft focus-visible:ring-offset-surface-page rounded-sm"
             >
               View transaction on Stellar Expert →
             </a>
